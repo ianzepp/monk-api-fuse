@@ -1,0 +1,30 @@
+# Binaries
+/monk-fuse
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test binaries
+*.test
+/test_client.go
+
+# Go build artifacts
+*.o
+*.a
+*.out
+
+# Go mod cache
+go.work
+go.work.sum
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
