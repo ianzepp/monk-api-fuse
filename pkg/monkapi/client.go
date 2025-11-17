@@ -183,6 +183,38 @@ func (e *APIError) Error() string {
 	return fmt.Sprintf("API error %d (%s): %s", e.StatusCode, e.ErrorCode, e.Message)
 }
 
+// Store stores file content to the File API
+func (c *Client) Store(ctx context.Context, path string, content interface{}, opts StoreOptions, pick string) (*StoreResponse, error) {
+	req := map[string]interface{}{
+		"path":         path,
+		"content":      content,
+		"file_options": opts,
+	}
+
+	endpoint := "/api/file/store"
+	if pick != "" {
+		endpoint += "?pick=" + url.QueryEscape(pick)
+	}
+
+	respBody, err := c.post(ctx, endpoint, req)
+	if err != nil {
+		return nil, err
+	}
+
+	// Unwrap the API response
+	var wrapper APIWrapper
+	if err := json.Unmarshal(respBody, &wrapper); err != nil {
+		return nil, fmt.Errorf("unmarshal wrapper: %w", err)
+	}
+
+	var result StoreResponse
+	if err := json.Unmarshal(wrapper.Data, &result); err != nil {
+		return nil, fmt.Errorf("unmarshal store response: %w", err)
+	}
+
+	return &result, nil
+}
+
 // IsNotFound returns true if the error is a 404 not found
 func IsNotFound(err error) bool {
 	apiErr, ok := err.(*APIError)

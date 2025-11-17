@@ -147,11 +147,15 @@ func (n *MonkFS) Open(ctx context.Context, flags uint32) (fs.FileHandle, uint32,
 
 // MonkFileHandle represents an open file handle
 type MonkFileHandle struct {
-	node *MonkFS
-	path string
+	node       *MonkFS
+	path       string
+	writeCache []byte
+	dirty      bool
 }
 
 var _ = (fs.FileReader)((*MonkFileHandle)(nil))
+var _ = (fs.FileWriter)((*MonkFileHandle)(nil))
+var _ = (fs.FileFlusher)((*MonkFileHandle)(nil))
 
 // Read implements file reading
 func (fh *MonkFileHandle) Read(ctx context.Context, dest []byte, off int64) (fuse.ReadResult, syscall.Errno) {
@@ -173,6 +177,58 @@ func (fh *MonkFileHandle) Read(ctx context.Context, dest []byte, off int64) (fus
 	}
 
 	return fuse.ReadResultData(data[off:]), 0
+}
+
+// Write implements file writing
+func (fh *MonkFileHandle) Write(ctx context.Context, data []byte, off int64) (uint32, syscall.Errno) {
+	// Initialize write cache on first write
+	if fh.writeCache == nil {
+		// Read existing content to initialize cache
+		resp, err := fh.node.apiClient.Retrieve(ctx, fh.path, monkapi.RetrieveOptions{}, "content")
+		if err != nil {
+			// If file doesn't exist, start with empty cache
+			if monkapi.IsNotFound(err) {
+				fh.writeCache = []byte{}
+			} else {
+				return 0, HTTPErrorToErrno(err)
+			}
+		} else {
+			fh.writeCache = contentToBytes(resp.Content)
+		}
+	}
+
+	// Expand cache if necessary
+	newSize := int(off) + len(data)
+	if newSize > len(fh.writeCache) {
+		newCache := make([]byte, newSize)
+		copy(newCache, fh.writeCache)
+		fh.writeCache = newCache
+	}
+
+	// Write data at offset
+	copy(fh.writeCache[off:], data)
+	fh.dirty = true
+
+	return uint32(len(data)), 0
+}
+
+// Flush implements file flush (sync to API)
+func (fh *MonkFileHandle) Flush(ctx context.Context) syscall.Errno {
+	if !fh.dirty {
+		return 0
+	}
+
+	// Store content to API
+	_, err := fh.node.apiClient.Store(ctx, fh.path, string(fh.writeCache), monkapi.StoreOptions{}, "")
+	if err != nil {
+		return HTTPErrorToErrno(err)
+	}
+
+	// Clear cache after successful write
+	fh.dirty = false
+	fh.node.cache.Invalidate(fh.path)
+
+	return 0
 }
 
 // Helper functions

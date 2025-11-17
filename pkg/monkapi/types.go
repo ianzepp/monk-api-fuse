@@ -68,6 +68,17 @@ type RetrieveResponse struct {
 	Content interface{} `json:"content"`
 }
 
+// StoreOptions represents options for the File API store operation
+type StoreOptions struct {
+	CreateMissing bool `json:"create_missing,omitempty"`
+}
+
+// StoreResponse represents the File API store response
+type StoreResponse struct {
+	Success      bool         `json:"success"`
+	FileMetadata FileMetadata `json:"file_metadata"`
+}
+
 // ErrorResponse represents an API error response
 type ErrorResponse struct {
 	Success   bool   `json:"success"`
