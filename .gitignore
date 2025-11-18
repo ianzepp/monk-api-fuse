@@ -1,5 +1,6 @@
 # Binaries
 /monk-fuse
+test_client
 *.exe
 *.dll
 *.so
